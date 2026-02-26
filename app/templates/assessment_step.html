@@ -1,0 +1,32 @@
+{% extends "base.html" %}
+{% block content %}
+  <div class="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+    <h1 class="text-2xl font-bold">{{ t('assessment_title') }}</h1>
+    <div class="text-sm text-slate-500">{{ t('assessment_step') }} {{ step }} / {{ total }}</div>
+  </div>
+
+  <form class="mt-6 bg-white border rounded-2xl p-6 max-w-2xl" method="post">
+    <div class="text-sm font-medium">{{ label }}</div>
+
+    {% if q.kind == 'choice' %}
+      <select name="value" class="mt-2 w-full border rounded-xl px-3 py-2">
+        {% for c in q.choices %}
+          <option value="{{c}}" {% if existing==c %}selected{% endif %}>{{ t('choice_' ~ c) }}</option>
+        {% endfor %}
+      </select>
+    {% else %}
+      <input name="value" value="{{ existing }}" class="mt-2 w-full border rounded-xl px-3 py-2" />
+    {% endif %}
+
+    {% if error %}<div class="mt-2 text-sm text-red-600">{{ error }}</div>{% endif %}
+
+    <div class="mt-6 flex flex-col gap-3 sm:flex-row sm:justify-between">
+      {% if step > 1 %}
+        <a class="px-4 py-2 rounded-xl border text-center" href="/assessment/{{ assessment.id }}/{{ step-1 }}">{{ t('assessment_back') }}</a>
+      {% else %}
+        <span></span>
+      {% endif %}
+      <button class="px-4 py-2 rounded-xl bg-slate-900 text-white" type="submit">{{ t('assessment_next') }}</button>
+    </div>
+  </form>
+{% endblock %}

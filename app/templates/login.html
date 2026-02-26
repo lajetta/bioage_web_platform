@@ -1,0 +1,12 @@
+{% extends "base.html" %}
+{% block content %}
+  <h1 class="text-2xl font-bold">{{ t('login_title') }}</h1>
+  <p class="mt-2 text-sm text-slate-600">{{ t('login_subtitle') }}</p>
+
+  <form class="mt-6 max-w-md bg-white border rounded-2xl p-6" method="post" action="/login">
+    <label class="block text-sm font-medium">{{ t('login_email') }}</label>
+    <input name="email" type="email" required class="mt-1 w-full border rounded-xl px-3 py-2" placeholder="you@example.com" />
+    {% if error %}<div class="mt-2 text-sm text-red-600">{{ error }}</div>{% endif %}
+    <button class="mt-4 w-full px-4 py-2 rounded-xl bg-slate-900 text-white" type="submit">{{ t('login_send_code') }}</button>
+  </form>
+{% endblock %}

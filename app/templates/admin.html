@@ -1,0 +1,143 @@
+{% extends "base.html" %}
+{% block content %}
+  <h1 class="text-2xl font-bold">{{ t('admin_title') }}</h1>
+  <p class="mt-2 text-sm text-slate-600">{{ t('admin_pending_submissions') }}</p>
+
+  <div class="mt-6 bg-white border rounded-2xl p-5 sm:p-6">
+    <div class="font-semibold">{{ t('admin_content_title') }}</div>
+    {% if saved %}
+      <div class="mt-3 text-sm text-emerald-700 bg-emerald-50 border border-emerald-200 rounded-xl p-3">{{ t('admin_content_saved') }}</div>
+    {% endif %}
+    {% if error %}
+      <div class="mt-3 text-sm text-red-700 bg-red-50 border border-red-200 rounded-xl p-3">{{ error }}</div>
+    {% endif %}
+    <form class="mt-4 grid gap-4" method="post" action="/admin/founder-content" enctype="multipart/form-data">
+      <div>
+        <label class="block text-sm font-medium">{{ t('admin_founder_name') }}</label>
+        <input class="mt-1 w-full border rounded-xl px-3 py-2" name="founder_name" value="{{ site_content.founder_name }}" />
+      </div>
+      <div>
+        <label class="block text-sm font-medium">{{ t('admin_founder_intro') }}</label>
+        <textarea class="mt-1 w-full border rounded-xl px-3 py-2 min-h-28" name="founder_intro">{{ site_content.founder_intro }}</textarea>
+      </div>
+      <div>
+        <label class="block text-sm font-medium">{{ t('admin_founder_photo_url') }}</label>
+        <input class="mt-1 w-full border rounded-xl px-3 py-2" name="founder_photo_url" value="{{ site_content.founder_photo_url }}" />
+      </div>
+      <div>
+        <label class="block text-sm font-medium">{{ t('admin_founder_photo_upload') }}</label>
+        <input class="mt-1 w-full border rounded-xl px-3 py-2 bg-white" type="file" name="founder_photo_file" accept="image/*" />
+      </div>
+      <div>
+        <label class="block text-sm font-medium">{{ t('admin_founder_video_url') }}</label>
+        <input class="mt-1 w-full border rounded-xl px-3 py-2" name="founder_video_url" value="{{ site_content.founder_video_url }}" />
+      </div>
+      <div>
+        <label class="block text-sm font-medium">{{ t('admin_founder_video_upload') }}</label>
+        <input class="mt-1 w-full border rounded-xl px-3 py-2 bg-white" type="file" name="founder_video_file" accept="video/*" />
+      </div>
+      <div class="text-xs text-slate-500">{{ t('admin_upload_hint') }}</div>
+      <div>
+        <button class="px-4 py-2 rounded-xl bg-slate-900 text-white w-full sm:w-auto" type="submit">{{ t('admin_content_save') }}</button>
+      </div>
+    </form>
+  </div>
+
+  <div class="mt-6 bg-white border rounded-2xl p-5 sm:p-6">
+    <div class="font-semibold">{{ t('admin_tutorial_categories_title') }}</div>
+    <form class="mt-4 grid gap-4" method="post" action="/admin/tutorial-categories">
+      <div>
+        <label class="block text-sm font-medium">{{ t('admin_tutorial_category_title') }}</label>
+        <input class="mt-1 w-full border rounded-xl px-3 py-2" name="title" />
+      </div>
+      <div>
+        <label class="block text-sm font-medium">{{ t('admin_tutorial_category_description') }}</label>
+        <textarea class="mt-1 w-full border rounded-xl px-3 py-2 min-h-20" name="description"></textarea>
+      </div>
+      <div>
+        <button class="px-4 py-2 rounded-xl bg-slate-900 text-white w-full sm:w-auto" type="submit">{{ t('admin_tutorial_category_create') }}</button>
+      </div>
+    </form>
+    {% if tutorial_categories|length > 0 %}
+      <div class="mt-4 text-sm text-slate-700">
+        {% for c in tutorial_categories %}
+          <div class="py-1"><b>{{ c.title }}</b> <span class="text-slate-500">({{ c.slug }})</span></div>
+        {% endfor %}
+      </div>
+    {% endif %}
+  </div>
+
+  <div class="mt-6 bg-white border rounded-2xl p-5 sm:p-6">
+    <div class="font-semibold">{{ t('admin_tutorials_title') }}</div>
+    <form class="mt-4 grid gap-4" method="post" action="/admin/tutorials" enctype="multipart/form-data">
+      <div>
+        <label class="block text-sm font-medium">{{ t('admin_tutorial_category_pick') }}</label>
+        <select class="mt-1 w-full border rounded-xl px-3 py-2" name="category_id" required>
+          <option value="">{{ t('admin_tutorial_category_pick') }}</option>
+          {% for c in tutorial_categories %}
+            <option value="{{ c.id }}">{{ c.title }}</option>
+          {% endfor %}
+        </select>
+      </div>
+      <div>
+        <label class="block text-sm font-medium">{{ t('admin_tutorial_title') }}</label>
+        <input class="mt-1 w-full border rounded-xl px-3 py-2" name="title" />
+      </div>
+      <div>
+        <label class="block text-sm font-medium">{{ t('admin_tutorial_summary') }}</label>
+        <textarea class="mt-1 w-full border rounded-xl px-3 py-2 min-h-20" name="summary"></textarea>
+      </div>
+      <div>
+        <label class="block text-sm font-medium">{{ t('admin_tutorial_body') }}</label>
+        <textarea class="mt-1 w-full border rounded-xl px-3 py-2 min-h-32" name="body"></textarea>
+      </div>
+      <div>
+        <label class="block text-sm font-medium">{{ t('admin_tutorial_required_plan') }}</label>
+        <select class="mt-1 w-full border rounded-xl px-3 py-2" name="required_plan">
+          <option value="free">free</option>
+          <option value="pro">pro</option>
+          <option value="premium">premium</option>
+        </select>
+      </div>
+      <div>
+        <label class="block text-sm font-medium">{{ t('admin_tutorial_video_url') }}</label>
+        <input class="mt-1 w-full border rounded-xl px-3 py-2" name="video_url" />
+      </div>
+      <div>
+        <label class="block text-sm font-medium">{{ t('admin_tutorial_file_upload') }}</label>
+        <input class="mt-1 w-full border rounded-xl px-3 py-2 bg-white" type="file" name="tutorial_file" />
+      </div>
+      <div>
+        <button class="px-4 py-2 rounded-xl bg-slate-900 text-white w-full sm:w-auto" type="submit">{{ t('admin_tutorial_create') }}</button>
+      </div>
+    </form>
+
+    {% if tutorials_admin|length > 0 %}
+      <div class="mt-6 grid gap-3">
+        {% for row in tutorials_admin %}
+          <div class="border rounded-xl p-3 text-sm">
+            <div><b>{{ row.tutorial.title }}</b> <span class="text-slate-500">({{ row.tutorial.slug }})</span></div>
+            <div class="text-slate-600">{{ row.category_title }} - {{ row.tutorial.required_plan }}</div>
+          </div>
+        {% endfor %}
+      </div>
+    {% endif %}
+  </div>
+
+  <div class="mt-6 grid gap-4">
+    {% if updates|length == 0 %}
+      <div class="bg-white border rounded-2xl p-6">{{ t('admin_no_pending') }}</div>
+    {% else %}
+      {% for u in updates %}
+        <div class="bg-white border rounded-2xl p-6">
+          <div class="flex items-center justify-between">
+            <div class="font-semibold">{{ t('admin_update') }} {{ u.id }}</div>
+            <div class="text-xs px-2 py-1 rounded-full border">{{ t('status_' ~ u.status) }}</div>
+          </div>
+          <pre class="mt-3 text-xs bg-slate-50 border rounded-xl p-3 overflow-auto">{{ u.payload | tojson }}</pre>
+          <div class="mt-3 text-xs text-slate-500">{{ t('admin_queue_note') }}</div>
+        </div>
+      {% endfor %}
+    {% endif %}
+  </div>
+{% endblock %}

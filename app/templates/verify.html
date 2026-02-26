@@ -1,0 +1,18 @@
+{% extends "base.html" %}
+{% block content %}
+  <h1 class="text-2xl font-bold">{{ t('verify_title') }}</h1>
+  <p class="mt-2 text-sm text-slate-600">{{ t('verify_sent_code') }} <b>{{ email }}</b>.</p>
+
+  <form class="mt-6 max-w-md bg-white border rounded-2xl p-6" method="post" action="/verify">
+    <input type="hidden" name="email" value="{{ email }}" />
+    <label class="block text-sm font-medium">{{ t('verify_code') }}</label>
+    <input name="code" inputmode="numeric" pattern="[0-9]{6}" required class="mt-1 w-full border rounded-xl px-3 py-2" placeholder="123456" />
+    {% if error %}<div class="mt-2 text-sm text-red-600">{{ error }}</div>{% endif %}
+    {% if hint %}
+      <div class="mt-3 text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded-xl p-3">
+        {{ t('verify_dev_hint') }}: <b>{{ hint }}</b>
+      </div>
+    {% endif %}
+    <button class="mt-4 w-full px-4 py-2 rounded-xl bg-slate-900 text-white" type="submit">{{ t('verify_submit') }}</button>
+  </form>
+{% endblock %}

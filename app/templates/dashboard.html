@@ -1,0 +1,36 @@
+{% extends "base.html" %}
+{% block content %}
+  <h1 class="text-2xl font-bold">{{ t('dashboard_title') }}</h1>
+  <p class="mt-2 text-sm text-slate-600">{{ t('dashboard_logged_in_as') }} <b>{{ user.email }}</b></p>
+  <div class="mt-4 bg-white border rounded-2xl p-4 text-sm text-slate-700">
+    <div><b>{{ t('dashboard_plan') }}:</b> {{ current_plan }}</div>
+    <div class="mt-1"><b>{{ t('dashboard_report_quota') }}:</b> {% if plan_features.monthly_reports is none %}{{ t('dashboard_unlimited') }}{% else %}{{ plan_features.monthly_reports }} / {{ t('dashboard_month') }}{% endif %}</div>
+    <div class="mt-2"><a class="underline" href="/tutorials">{{ t('dashboard_open_tutorials') }}</a></div>
+  </div>
+
+  <div class="mt-6 grid gap-4">
+    {% if reports|length == 0 %}
+      <div class="bg-white border rounded-2xl p-6">{{ t('dashboard_no_reports') }}</div>
+    {% else %}
+      {% for r in reports %}
+        <div class="bg-white border rounded-2xl p-6">
+          <div class="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+            <div class="font-semibold">{{ t('dashboard_report') }} {{ t('report_type_' ~ r.report_type) }} - {{ r.created_at.strftime('%Y-%m-%d %H:%M') }}</div>
+            <div class="text-xs px-2 py-1 rounded-full border w-fit">{{ t('status_' ~ r.status) }}</div>
+          </div>
+          {% if r.file_path %}
+            <div class="mt-3">
+              <a class="text-sm text-slate-900 underline" href="/reports/{{ r.id }}/download">{{ t('dashboard_download_report') }}</a>
+            </div>
+          {% else %}
+            <div class="mt-3 text-sm text-slate-600">{{ t('dashboard_worker_email_hint') }}</div>
+          {% endif %}
+        </div>
+      {% endfor %}
+    {% endif %}
+  </div>
+
+  <div class="mt-8">
+    <a class="inline-block px-4 py-2 rounded-xl bg-slate-900 text-white text-center w-full sm:w-auto" href="/assessment">{{ t('dashboard_start_new_assessment') }}</a>
+  </div>
+{% endblock %}

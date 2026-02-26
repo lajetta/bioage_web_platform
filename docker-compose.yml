@@ -1,0 +1,49 @@
+services:
+  db:
+    image: postgres:16
+    environment:
+      POSTGRES_DB: bioage
+      POSTGRES_USER: bioage
+      POSTGRES_PASSWORD: bioage
+    ports:
+      - "5432:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+
+  redis:
+    image: redis:7
+    ports:
+      - "6379:6379"
+
+  web:
+    build: .
+    env_file: .env
+    environment:
+      DATABASE_URL: postgresql+asyncpg://bioage:bioage@db:5432/bioage
+      REDIS_URL: redis://redis:6379/0
+      REPORT_DIR: /data/reports
+    ports:
+      - "8000:8000"
+    depends_on:
+      - db
+      - redis
+    volumes:
+      - reports:/data/reports
+
+  worker:
+    build: .
+    command: ["python", "worker.py"]
+    env_file: .env
+    environment:
+      DATABASE_URL: postgresql+asyncpg://bioage:bioage@db:5432/bioage
+      REDIS_URL: redis://redis:6379/0
+      REPORT_DIR: /data/reports
+    depends_on:
+      - db
+      - redis
+    volumes:
+      - reports:/data/reports
+
+volumes:
+  pgdata:
+  reports:

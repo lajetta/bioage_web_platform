@@ -1,0 +1,45 @@
+<!doctype html>
+<html lang="{{ lang }}">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>{{ app_name }}</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+</head>
+<body class="bg-slate-50 text-slate-900">
+  <header class="border-b bg-white">
+    <div class="mx-auto max-w-5xl px-4 py-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+      <a href="/" class="font-semibold">{{ app_name }}</a>
+      <nav class="flex w-full flex-wrap items-center gap-x-4 gap-y-2 text-sm sm:w-auto sm:justify-end">
+        <a class="hover:underline" href="/">{{ t('nav_home') }}</a>
+        <a class="hover:underline" href="/pricing">{{ t('nav_pricing') }}</a>
+        {% if user %}
+          <a class="hover:underline" href="/assessment">{{ t('nav_assessment') }}</a>
+          <a class="hover:underline" href="/dashboard">{{ t('nav_dashboard') }}</a>
+          <a class="hover:underline" href="/tutorials">{{ t('nav_tutorials') }}</a>
+          {% if user.is_admin %}<a class="hover:underline" href="/admin">{{ t('nav_admin') }}</a>{% endif %}
+          <a class="hover:underline" href="/logout">{{ t('nav_logout') }}</a>
+        {% else %}
+          <a class="hover:underline" href="/login">{{ t('nav_login') }}</a>
+        {% endif %}
+        <div class="ml-0 flex items-center gap-2 sm:ml-2">
+          {% for code in supported_langs %}
+            <a href="/lang/{{code}}" class="px-2 py-1 rounded border {% if code==lang %}bg-slate-900 text-white{% else %}bg-white{% endif %}">{{ code }}</a>
+          {% endfor %}
+        </div>
+      </nav>
+    </div>
+  </header>
+
+  <main class="mx-auto max-w-5xl px-4 py-6 sm:py-8">
+    {% block content %}{% endblock %}
+  </main>
+
+  <footer class="border-t bg-white">
+    <div class="mx-auto max-w-5xl px-4 py-6 text-xs text-slate-500">
+      <div>(c) {{ app_name }} - {{ t('footer_mvp') }}</div>
+      <div class="mt-1">{{ t('footer_disclaimer') }}</div>
+    </div>
+  </footer>
+</body>
+</html>
