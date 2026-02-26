@@ -51,8 +51,8 @@
     <h2 class="text-2xl font-bold">{{ t('home_founder_title') }}</h2>
     <div class="mt-6 grid md:grid-cols-2 gap-8">
       <div class="flex flex-col gap-4 sm:flex-row">
-        {% if site_content.founder_photo_url %}
-          <img src="{{ site_content.founder_photo_url }}" alt="{{ site_content.founder_name or t('home_founder_default_name') }}" class="w-24 h-24 rounded-full object-cover border mx-auto sm:mx-0" />
+        {% if founder_photo_url %}
+          <img src="{{ founder_photo_url }}" alt="{{ site_content.founder_name or t('home_founder_default_name') }}" class="w-24 h-24 rounded-full object-cover border mx-auto sm:mx-0" />
         {% endif %}
         <div>
           <div class="text-lg font-semibold">{{ site_content.founder_name or t('home_founder_default_name') }}</div>
@@ -61,12 +61,12 @@
       </div>
       <div>
         <div class="text-sm font-semibold">{{ t('home_founder_video_title') }}</div>
-        {% if site_content.founder_video_url %}
+        {% if founder_video_url %}
           {% if founder_video_is_embed %}
             <div class="mt-2 aspect-video">
               <iframe
                 class="w-full h-full rounded-xl border"
-                src="{{ site_content.founder_video_url }}"
+                src="{{ founder_video_url }}"
                 title="{{ t('home_founder_video_iframe_title') }}"
                 loading="lazy"
                 allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
@@ -76,7 +76,7 @@
             </div>
           {% else %}
             <video class="mt-2 w-full rounded-xl border bg-black" controls preload="metadata">
-              <source src="{{ site_content.founder_video_url }}" />
+              <source src="{{ founder_video_url }}" />
             </video>
           {% endif %}
         {% else %}

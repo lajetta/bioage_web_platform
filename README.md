@@ -137,6 +137,47 @@ You typically create:
 
 **Important:** the PDF files are written to `/data/reports` inside the container. In production, you should store PDFs in object storage (S3/R2/etc.) and only keep a signed download URL in the DB.
 
+### Security + storage checklist (production)
+
+Set these env vars:
+
+```env
+ENVIRONMENT=prod
+ENFORCE_HTTPS=true
+ALLOWED_HOSTS=your-domain.railway.app,your-custom-domain.com
+SESSION_COOKIE_SECURE=true
+SESSION_COOKIE_SAMESITE=lax
+SESSION_MAX_AGE_SECONDS=2592000
+```
+
+For durable files (reports/uploads), use S3-compatible storage:
+
+```env
+STORAGE_BACKEND=s3
+S3_BUCKET=...
+S3_REGION=...
+S3_ACCESS_KEY_ID=...
+S3_SECRET_ACCESS_KEY=...
+S3_ENDPOINT_URL=...          # optional for non-AWS providers
+S3_PUBLIC_BASE_URL=...       # optional (public media URL base)
+S3_PRESIGN_EXPIRY_SECONDS=3600
+S3_REPORTS_PREFIX=reports
+S3_UPLOADS_PREFIX=uploads
+```
+
+Email reliability:
+
+```env
+SMTP_HOST=...
+SMTP_PORT=587
+SMTP_USERNAME=...
+SMTP_PASSWORD=...
+EMAIL_FROM=...
+SMTP_USE_TLS=true
+SMTP_TIMEOUT_SECONDS=20
+EMAIL_SEND_RETRIES=3
+```
+
 ---
 
 ## 6) Folder structure
@@ -159,4 +200,3 @@ You typically create:
 - Add object storage (S3/R2) for report PDFs.
 - Add proper user session expiration + logout.
 - Add tests + CI (pytest) and linting (ruff).
-

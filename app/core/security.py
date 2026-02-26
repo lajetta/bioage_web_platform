@@ -4,12 +4,12 @@ import hashlib
 import secrets
 from datetime import datetime, timedelta, timezone
 
-from itsdangerous import URLSafeSerializer
+from itsdangerous import URLSafeTimedSerializer
 
 from app.core.settings import settings
 
 
-serializer = URLSafeSerializer(settings.secret_key, salt="bioage-session")
+serializer = URLSafeTimedSerializer(settings.secret_key, salt="bioage-session")
 
 
 def hash_code(code: str) -> str:
@@ -32,7 +32,7 @@ def sign_session(user_id: str) -> str:
 
 def unsign_session(token: str) -> str | None:
     try:
-        data = serializer.loads(token)
+        data = serializer.loads(token, max_age=settings.session_max_age_seconds)
         return data.get("user_id")
     except Exception:
         return None

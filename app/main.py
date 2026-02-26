@@ -9,6 +9,8 @@ from fastapi import BackgroundTasks, Cookie, Depends, FastAPI, File, Form, HTTPE
 from fastapi.responses import FileResponse, HTMLResponse, PlainTextResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
+from starlette.middleware.httpsredirect import HTTPSRedirectMiddleware
+from starlette.middleware.trustedhost import TrustedHostMiddleware
 from sqlalchemy import select
 
 from app.core.i18n import get_lang, t
@@ -27,6 +29,7 @@ from app.services.subscriptions.service import (
     has_plan_access,
     upsert_subscription,
 )
+from app.services.storage.service import is_s3_ref, media_view_url, presigned_download_url, store_upload
 
 import redis
 from rq import Queue
@@ -40,11 +43,37 @@ UPLOADS_DIR = os.path.join(STATIC_DIR, "uploads")
 templates = Jinja2Templates(directory=TEMPLATES_DIR)
 
 app = FastAPI(title=settings.app_name)
-# app.mount("/static", StaticFiles(directory=STATIC_DIR), name="static")
-STATIC_DIR = os.path.join(os.path.dirname(__file__), "static")
-
 if os.path.isdir(STATIC_DIR):
     app.mount("/static", StaticFiles(directory=STATIC_DIR), name="static")
+
+if settings.allowed_hosts and settings.allowed_hosts.strip() != "*":
+    app.add_middleware(TrustedHostMiddleware, allowed_hosts=[h.strip() for h in settings.allowed_hosts.split(",") if h.strip()])
+if settings.enforce_https:
+    app.add_middleware(HTTPSRedirectMiddleware)
+
+
+@app.middleware("http")
+async def security_headers_middleware(request: Request, call_next):
+    response = await call_next(request)
+    response.headers["X-Content-Type-Options"] = "nosniff"
+    response.headers["X-Frame-Options"] = "DENY"
+    response.headers["Referrer-Policy"] = "strict-origin-when-cross-origin"
+    response.headers["Permissions-Policy"] = "camera=(), microphone=(), geolocation=()"
+    if settings.enforce_https:
+        response.headers["Strict-Transport-Security"] = "max-age=31536000; includeSubDomains; preload"
+    csp = (
+        "default-src 'self'; "
+        "script-src 'self' https://cdn.tailwindcss.com; "
+        "style-src 'self' 'unsafe-inline'; "
+        "img-src 'self' data: https:; "
+        "media-src 'self' https: blob:; "
+        "frame-src https://www.youtube.com https://player.vimeo.com; "
+        "connect-src 'self' https:; "
+        "base-uri 'self'; "
+        "form-action 'self';"
+    )
+    response.headers["Content-Security-Policy"] = csp
+    return response
 
 
 @app.on_event("startup")
@@ -69,7 +98,10 @@ async def get_db():
         yield session
 
 
-async def get_current_user(session_token: str | None = Cookie(default=None), db=Depends(get_db)) -> models.User | None:
+async def get_current_user(
+    session_token: str | None = Cookie(default=None, alias=settings.session_cookie_name),
+    db=Depends(get_db),
+) -> models.User | None:
     if not session_token:
         return None
     user_id = unsign_session(session_token)
@@ -184,8 +216,11 @@ async def _save_upload(
     if len(data) > max_bytes:
         raise ValueError(too_large_key)
 
-    os.makedirs(UPLOADS_DIR, exist_ok=True)
     filename = f"{name_prefix}_{datetime.utcnow().strftime('%Y%m%d%H%M%S')}_{os.urandom(6).hex()}{ext or ''}"
+    if settings.storage_backend == "s3":
+        return store_upload(filename, data, content_type=content_type)
+
+    os.makedirs(UPLOADS_DIR, exist_ok=True)
     path = os.path.join(UPLOADS_DIR, filename)
     with open(path, "wb") as f:
         f.write(data)
@@ -230,17 +265,25 @@ async def set_lang(code: str, request: Request):
     if code not in ("en", "uk", "ru"):
         raise HTTPException(400, "Unsupported language")
     resp = RedirectResponse(url=request.headers.get("referer") or "/", status_code=302)
-    resp.set_cookie("lang", code, max_age=60 * 60 * 24 * 365)
+    resp.set_cookie("lang", code, max_age=60 * 60 * 24 * 365, secure=settings.session_cookie_secure, samesite=settings.session_cookie_samesite)
     return resp
 
 
 @app.get("/", response_class=HTMLResponse)
 async def home(request: Request, user=Depends(get_current_user), db=Depends(get_db)):
     site_content = await _get_site_content(db)
+    founder_photo_url = media_view_url(site_content.founder_photo_url)
+    founder_video_url = media_view_url(site_content.founder_video_url)
     return _render(
         request,
         "home.html",
-        {"user": user, "site_content": site_content, "founder_video_is_embed": _is_embed_video_url(site_content.founder_video_url)},
+        {
+            "user": user,
+            "site_content": site_content,
+            "founder_photo_url": founder_photo_url,
+            "founder_video_url": founder_video_url,
+            "founder_video_is_embed": _is_embed_video_url(founder_video_url),
+        },
     )
 
 
@@ -262,7 +305,12 @@ async def login_page(request: Request, user=Depends(get_current_user)):
 @app.get("/logout")
 async def logout():
     resp = RedirectResponse("/", status_code=302)
-    resp.delete_cookie("session_token")
+    resp.delete_cookie(
+        settings.session_cookie_name,
+        httponly=True,
+        secure=settings.session_cookie_secure,
+        samesite=settings.session_cookie_samesite,
+    )
     return resp
 
 
@@ -329,7 +377,14 @@ async def verify_code(request: Request, email: str = Form(...), code: str = Form
 
     token = sign_session(user.id)
     resp = RedirectResponse("/dashboard", status_code=302)
-    resp.set_cookie("session_token", token, httponly=True, max_age=60 * 60 * 24 * 30)
+    resp.set_cookie(
+        settings.session_cookie_name,
+        token,
+        httponly=True,
+        secure=settings.session_cookie_secure,
+        samesite=settings.session_cookie_samesite,
+        max_age=settings.session_max_age_seconds,
+    )
     return resp
 
 
@@ -614,6 +669,16 @@ async def download_report(report_id: str, user=Depends(get_current_user), db=Dep
         raise HTTPException(404)
     if not report.file_path:
         raise HTTPException(404, "Report file is not ready")
+
+    if is_s3_ref(report.file_path):
+        signed_url = presigned_download_url(report.file_path)
+        if not signed_url:
+            raise HTTPException(404, "Report file not found on storage")
+        return RedirectResponse(signed_url, status_code=302)
+
+    if report.file_path.startswith("/static/"):
+        return RedirectResponse(report.file_path, status_code=302)
+
     if not os.path.isfile(report.file_path):
         raise HTTPException(404, "Report file not found on server")
 
@@ -646,7 +711,14 @@ async def tutorials(request: Request, user=Depends(get_current_user), db=Depends
     items = []
     for tutorial, category in res.all():
         if has_plan_access(plan_id, _normalize_plan_id(tutorial.required_plan)):
-            items.append({"tutorial": tutorial, "category": category})
+            items.append(
+                {
+                    "tutorial": tutorial,
+                    "category": category,
+                    "video_url": media_view_url(tutorial.video_url),
+                    "file_url": media_view_url(tutorial.file_url),
+                }
+            )
     return _render(request, "tutorials.html", {"user": user, "tutorials": items, "current_plan": plan_id})
 
 
@@ -667,10 +739,21 @@ async def tutorial_detail(slug: str, request: Request, user=Depends(get_current_
     plan_id = await get_current_plan_id(db, user.id)
     if not has_plan_access(plan_id, _normalize_plan_id(tutorial.required_plan)):
         return RedirectResponse("/pricing?upgrade=1", status_code=302)
+    tutorial_video_url = media_view_url(tutorial.video_url)
+    tutorial_file_url = media_view_url(tutorial.file_url)
     return _render(
         request,
         "tutorial_detail.html",
-        {"user": user, "tutorial": tutorial, "category": category, "slug": slug, "current_plan": plan_id, "tutorial_video_is_embed": _is_embed_video_url(tutorial.video_url)},
+        {
+            "user": user,
+            "tutorial": tutorial,
+            "category": category,
+            "slug": slug,
+            "current_plan": plan_id,
+            "tutorial_video_url": tutorial_video_url,
+            "tutorial_file_url": tutorial_file_url,
+            "tutorial_video_is_embed": _is_embed_video_url(tutorial_video_url),
+        },
     )
 
 

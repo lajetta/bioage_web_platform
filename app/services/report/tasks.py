@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import os
 from datetime import datetime
 
 from sqlalchemy import select
@@ -11,15 +10,10 @@ from app.db import models
 from app.services.openai_service import generate_report_json
 from app.services.report.pdf import build_pdf
 from app.services.email.service import send_email
-
-
-REPORT_DIR = os.getenv("REPORT_DIR", "/data/reports")
-
+from app.services.storage.service import store_report
 
 def generate_and_send_report(report_id: str) -> None:
     """RQ worker task: generate report JSON + PDF and email it."""
-    os.makedirs(REPORT_DIR, exist_ok=True)
-
     async def _run() -> None:
         async with SessionLocal() as session:
             report = await session.get(models.Report, report_id)
@@ -41,12 +35,10 @@ def generate_and_send_report(report_id: str) -> None:
             pdf_bytes = build_pdf(content, user.language)
 
             filename = f"bioage_report_{datetime.utcnow().strftime('%Y%m%d_%H%M%S')}_{report.id}.pdf"
-            path = os.path.join(REPORT_DIR, filename)
-            with open(path, "wb") as f:
-                f.write(pdf_bytes)
+            stored_ref = store_report(filename, pdf_bytes)
 
             report.content_json = content
-            report.file_path = path
+            report.file_path = stored_ref
             report.status = "sent"
             await session.commit()
 

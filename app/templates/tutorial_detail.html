@@ -10,31 +10,31 @@
     {% if tutorial.body %}
       <div class="mt-4 text-sm text-slate-800 whitespace-pre-line">{{ tutorial.body }}</div>
     {% endif %}
-    {% if tutorial.video_url %}
-      <div class="mt-6">
-        {% if tutorial_video_is_embed %}
-          <div class="aspect-video max-w-3xl">
-            <iframe
-              class="w-full h-full rounded-xl border"
-              src="{{ tutorial.video_url }}"
-              title="{{ tutorial.title }}"
+  {% if tutorial_video_url %}
+    <div class="mt-6">
+      {% if tutorial_video_is_embed %}
+        <div class="aspect-video max-w-3xl">
+          <iframe
+            class="w-full h-full rounded-xl border"
+            src="{{ tutorial_video_url }}"
+            title="{{ tutorial.title }}"
               loading="lazy"
               allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
               referrerpolicy="strict-origin-when-cross-origin"
               allowfullscreen>
             </iframe>
           </div>
-        {% else %}
-          <video class="w-full max-w-3xl rounded-xl border bg-black" controls preload="metadata">
-            <source src="{{ tutorial.video_url }}" />
-          </video>
-        {% endif %}
-      </div>
-    {% endif %}
-    {% if tutorial.file_url %}
-      <div class="mt-4">
-        <a class="underline text-sm" href="{{ tutorial.file_url }}" target="_blank" rel="noopener">{{ t('tutorials_download') }}</a>
-      </div>
-    {% endif %}
+      {% else %}
+        <video class="w-full max-w-3xl rounded-xl border bg-black" controls preload="metadata">
+          <source src="{{ tutorial_video_url }}" />
+        </video>
+      {% endif %}
+    </div>
+  {% endif %}
+  {% if tutorial_file_url %}
+    <div class="mt-4">
+      <a class="underline text-sm" href="{{ tutorial_file_url }}" target="_blank" rel="noopener">{{ t('tutorials_download') }}</a>
+    </div>
+  {% endif %}
   </div>
 {% endblock %}
