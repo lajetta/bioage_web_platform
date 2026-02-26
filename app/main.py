@@ -40,7 +40,11 @@ UPLOADS_DIR = os.path.join(STATIC_DIR, "uploads")
 templates = Jinja2Templates(directory=TEMPLATES_DIR)
 
 app = FastAPI(title=settings.app_name)
-app.mount("/static", StaticFiles(directory=STATIC_DIR), name="static")
+# app.mount("/static", StaticFiles(directory=STATIC_DIR), name="static")
+STATIC_DIR = os.path.join(os.path.dirname(__file__), "static")
+
+if os.path.isdir(STATIC_DIR):
+    app.mount("/static", StaticFiles(directory=STATIC_DIR), name="static")
 
 
 @app.on_event("startup")
