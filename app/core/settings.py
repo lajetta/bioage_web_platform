@@ -17,6 +17,8 @@ class Settings(BaseSettings):
     session_cookie_name: str = "session_token"
     session_cookie_secure: bool = False
     session_cookie_samesite: str = "lax"  # lax|strict|none
+    csrf_cookie_name: str = "csrf_token"
+    csrf_max_age_seconds: int = 60 * 60 * 12
 
     # Database
     database_url: str = "postgresql+asyncpg://bioage:bioage@db:5432/bioage"
@@ -45,6 +47,14 @@ class Settings(BaseSettings):
 
     # RQ/Redis
     redis_url: str = "redis://redis:6379/0"
+    rate_limit_login_ip_limit: int = 10
+    rate_limit_login_ip_window_seconds: int = 60
+    rate_limit_login_email_limit: int = 5
+    rate_limit_login_email_window_seconds: int = 300
+    rate_limit_verify_ip_limit: int = 20
+    rate_limit_verify_ip_window_seconds: int = 60
+    rate_limit_verify_email_limit: int = 8
+    rate_limit_verify_email_window_seconds: int = 300
 
     # Storage
     storage_backend: str = "local"  # local|s3

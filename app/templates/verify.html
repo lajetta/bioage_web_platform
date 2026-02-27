@@ -5,6 +5,7 @@
 
   <form class="mt-6 max-w-md bg-white border rounded-2xl p-6" method="post" action="/verify">
     <input type="hidden" name="email" value="{{ email }}" />
+    <input type="hidden" name="csrf_token" value="{{ csrf_token }}" />
     <label class="block text-sm font-medium">{{ t('verify_code') }}</label>
     <input name="code" inputmode="numeric" pattern="[0-9]{6}" required class="mt-1 w-full border rounded-xl px-3 py-2" placeholder="123456" />
     {% if error %}<div class="mt-2 text-sm text-red-600">{{ error }}</div>{% endif %}

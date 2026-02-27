@@ -10,6 +10,7 @@ from app.core.settings import settings
 
 
 serializer = URLSafeTimedSerializer(settings.secret_key, salt="bioage-session")
+csrf_serializer = URLSafeTimedSerializer(settings.secret_key, salt="bioage-csrf")
 
 
 def hash_code(code: str) -> str:
@@ -36,3 +37,15 @@ def unsign_session(token: str) -> str | None:
         return data.get("user_id")
     except Exception:
         return None
+
+
+def sign_csrf() -> str:
+    return csrf_serializer.dumps({"nonce": secrets.token_hex(16)})
+
+
+def verify_csrf(token: str) -> bool:
+    try:
+        csrf_serializer.loads(token, max_age=settings.csrf_max_age_seconds)
+        return True
+    except Exception:
+        return False

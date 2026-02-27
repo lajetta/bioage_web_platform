@@ -6,6 +6,7 @@
   </div>
 
   <form class="mt-6 bg-white border rounded-2xl p-6 max-w-2xl" method="post">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token }}" />
     <div class="text-sm font-medium">{{ label }}</div>
 
     {% if q.kind == 'choice' %}

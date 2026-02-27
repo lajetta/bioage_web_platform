@@ -36,6 +36,7 @@
             <span class="px-4 py-2 rounded-xl border text-sm">{{ t('plan_current') }}</span>
           {% else %}
             <form method="post" action="/billing/checkout/pro">
+              <input type="hidden" name="csrf_token" value="{{ csrf_token }}" />
               <button class="px-4 py-2 rounded-xl bg-slate-900 text-white w-full sm:w-auto" type="submit">{{ t('plan_subscribe') }}</button>
             </form>
           {% endif %}
@@ -59,6 +60,7 @@
             <span class="px-4 py-2 rounded-xl border text-sm">{{ t('plan_current') }}</span>
           {% else %}
             <form method="post" action="/billing/checkout/premium">
+              <input type="hidden" name="csrf_token" value="{{ csrf_token }}" />
               <button class="px-4 py-2 rounded-xl bg-slate-900 text-white w-full sm:w-auto" type="submit">{{ t('plan_subscribe') }}</button>
             </form>
           {% endif %}

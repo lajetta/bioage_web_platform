@@ -14,7 +14,7 @@ from sqlalchemy import select
 
 from app.core.i18n import get_lang, t
 from app.core.questions import QUESTIONS, validate_answer
-from app.core.security import expires_in, generate_code, hash_code, sign_session, unsign_session
+from app.core.security import expires_in, generate_code, hash_code, sign_csrf, sign_session, unsign_session, verify_csrf
 from app.core.settings import settings
 from app.db.session import SessionLocal
 from app.db import models
@@ -125,7 +125,20 @@ def _render(request: Request, name: str, context: dict):
         "settings": settings,
     }
     base.update(context)
-    return templates.TemplateResponse(name, base)
+    csrf_cookie = request.cookies.get(settings.csrf_cookie_name)
+    csrf_token = csrf_cookie if csrf_cookie and verify_csrf(csrf_cookie) else sign_csrf()
+    base["csrf_token"] = csrf_token
+    resp = templates.TemplateResponse(name, base)
+    if csrf_cookie != csrf_token:
+        resp.set_cookie(
+            settings.csrf_cookie_name,
+            csrf_token,
+            httponly=True,
+            secure=settings.session_cookie_secure,
+            samesite=settings.session_cookie_samesite,
+            max_age=settings.csrf_max_age_seconds,
+        )
+    return resp
 
 
 def _localize_validation_error(lang: str, error: str) -> str:
@@ -135,6 +148,31 @@ def _localize_validation_error(lang: str, error: str) -> str:
         "Invalid choice": "error_invalid_choice",
     }
     return t(lang, mapping.get(error, error))
+
+
+def _verify_csrf_or_403(request: Request, csrf_token: str) -> None:
+    cookie_token = request.cookies.get(settings.csrf_cookie_name, "")
+    if not csrf_token or not cookie_token or csrf_token != cookie_token or not verify_csrf(csrf_token):
+        raise HTTPException(status_code=403, detail="CSRF validation failed")
+
+
+def _rate_limit_ok(key: str, limit: int, window_seconds: int) -> bool:
+    try:
+        conn = redis.from_url(settings.redis_url)
+        count = conn.incr(key)
+        if count == 1:
+            conn.expire(key, window_seconds)
+        return int(count) <= int(limit)
+    except Exception:
+        # fail open if redis is unavailable; availability first
+        return True
+
+
+def _client_ip(request: Request) -> str:
+    xff = request.headers.get("x-forwarded-for", "")
+    if xff:
+        return xff.split(",")[0].strip() or "unknown"
+    return (request.client.host if request.client else "") or "unknown"
 
 
 async def _get_site_content(db) -> models.SiteContent:
@@ -319,13 +357,30 @@ async def logout():
 
 
 @app.post("/login")
-async def login_send_code(request: Request, email: str = Form(...), db=Depends(get_db)):
+async def login_send_code(request: Request, email: str = Form(...), csrf_token: str = Form(""), db=Depends(get_db)):
     from email_validator import validate_email, EmailNotValidError
+
+    _verify_csrf_or_403(request, csrf_token)
+    lang = get_lang(request)
+    client_ip = _client_ip(request)
+    if not _rate_limit_ok(
+        f"rl:login:ip:{client_ip}",
+        settings.rate_limit_login_ip_limit,
+        settings.rate_limit_login_ip_window_seconds,
+    ):
+        return _render(request, "login.html", {"user": None, "error": t(lang, "error_rate_limited")})
 
     try:
         email_norm = validate_email(email, check_deliverability=False).email
     except EmailNotValidError:
-        return _render(request, "login.html", {"user": None, "error": t(get_lang(request), "error_invalid_email")})
+        return _render(request, "login.html", {"user": None, "error": t(lang, "error_invalid_email")})
+
+    if not _rate_limit_ok(
+        f"rl:login:email:{email_norm}",
+        settings.rate_limit_login_email_limit,
+        settings.rate_limit_login_email_window_seconds,
+    ):
+        return _render(request, "login.html", {"user": None, "error": t(lang, "error_rate_limited")})
 
     code = generate_code()
     code_h = hash_code(code)
@@ -351,8 +406,23 @@ async def login_send_code(request: Request, email: str = Form(...), db=Depends(g
 
 
 @app.post("/verify")
-async def verify_code(request: Request, email: str = Form(...), code: str = Form(...), db=Depends(get_db)):
+async def verify_code(request: Request, email: str = Form(...), code: str = Form(...), csrf_token: str = Form(""), db=Depends(get_db)):
+    _verify_csrf_or_403(request, csrf_token)
+    lang = get_lang(request)
     email = email.strip().lower()
+    client_ip = _client_ip(request)
+    if not _rate_limit_ok(
+        f"rl:verify:ip:{client_ip}",
+        settings.rate_limit_verify_ip_limit,
+        settings.rate_limit_verify_ip_window_seconds,
+    ):
+        return _render(request, "verify.html", {"email": email, "hint": None, "error": t(lang, "error_rate_limited")})
+    if not _rate_limit_ok(
+        f"rl:verify:email:{email}",
+        settings.rate_limit_verify_email_limit,
+        settings.rate_limit_verify_email_window_seconds,
+    ):
+        return _render(request, "verify.html", {"email": email, "hint": None, "error": t(lang, "error_rate_limited")})
     code_h = hash_code(code.strip())
 
     q = select(models.MagicLoginCode).where(
@@ -364,7 +434,7 @@ async def verify_code(request: Request, email: str = Form(...), code: str = Form
     rec = res.scalars().first()
 
     if not rec or rec.code_hash != code_h:
-        return _render(request, "verify.html", {"email": email, "hint": None, "error": t(get_lang(request), "error_wrong_code")})
+        return _render(request, "verify.html", {"email": email, "hint": None, "error": t(lang, "error_wrong_code")})
 
     rec.used = True
 
@@ -452,14 +522,18 @@ async def assessment_step_post(
     assessment_id: str,
     step: int,
     value: str = Form(""),
+    csrf_token: str = Form(""),
     user=Depends(get_current_user),
     db=Depends(get_db),
 ):
     if not user:
         return RedirectResponse("/login", status_code=302)
+    _verify_csrf_or_403(request, csrf_token)
 
     assessment = await db.get(models.Assessment, assessment_id)
     if not assessment or assessment.user_id != user.id:
+        raise HTTPException(404)
+    if step < 1 or step > len(QUESTIONS):
         raise HTTPException(404)
 
     q = QUESTIONS[step - 1]
@@ -510,9 +584,10 @@ async def assessment_step_post(
 
 
 @app.post("/report/{assessment_id}/start")
-async def start_report_generation(assessment_id: str, user=Depends(get_current_user), db=Depends(get_db)):
+async def start_report_generation(request: Request, assessment_id: str, csrf_token: str = Form(""), user=Depends(get_current_user), db=Depends(get_db)):
     if not user:
         return RedirectResponse("/login", status_code=302)
+    _verify_csrf_or_403(request, csrf_token)
 
     assessment = await db.get(models.Assessment, assessment_id)
     if not assessment or assessment.user_id != user.id or assessment.status != "completed":
@@ -535,9 +610,10 @@ async def start_report_generation(assessment_id: str, user=Depends(get_current_u
 
 
 @app.post("/billing/checkout/{plan_id}")
-async def billing_checkout(plan_id: str, user=Depends(get_current_user), db=Depends(get_db)):
+async def billing_checkout(request: Request, plan_id: str, csrf_token: str = Form(""), user=Depends(get_current_user), db=Depends(get_db)):
     if not user:
         return RedirectResponse("/login", status_code=302)
+    _verify_csrf_or_403(request, csrf_token)
     if plan_id not in {"pro", "premium"}:
         raise HTTPException(400, "Unsupported plan")
 
@@ -766,11 +842,13 @@ async def admin_create_tutorial_category(
     request: Request,
     title: str = Form(""),
     description: str = Form(""),
+    csrf_token: str = Form(""),
     user=Depends(get_current_user),
     db=Depends(get_db),
 ):
     if not user or not user.is_admin:
         raise HTTPException(403)
+    _verify_csrf_or_403(request, csrf_token)
 
     title_clean = title.strip()
     if not title_clean:
@@ -805,12 +883,14 @@ async def admin_create_tutorial(
     body: str = Form(""),
     required_plan: str = Form("free"),
     video_url: str = Form(""),
+    csrf_token: str = Form(""),
     tutorial_file: UploadFile | None = File(default=None),
     user=Depends(get_current_user),
     db=Depends(get_db),
 ):
     if not user or not user.is_admin:
         raise HTTPException(403)
+    _verify_csrf_or_403(request, csrf_token)
 
     lang = get_lang(request)
     title_clean = title.strip()
@@ -871,6 +951,7 @@ async def admin_update_founder_content(
     founder_intro: str = Form(""),
     founder_photo_url: str = Form(""),
     founder_video_url: str = Form(""),
+    csrf_token: str = Form(""),
     founder_photo_file: UploadFile | None = File(default=None),
     founder_video_file: UploadFile | None = File(default=None),
     user=Depends(get_current_user),
@@ -878,6 +959,7 @@ async def admin_update_founder_content(
 ):
     if not user or not user.is_admin:
         raise HTTPException(403)
+    _verify_csrf_or_403(request, csrf_token)
 
     site_content = await _get_site_content(db)
     site_content.founder_name = founder_name.strip()

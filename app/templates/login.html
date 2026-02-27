@@ -4,6 +4,7 @@
   <p class="mt-2 text-sm text-slate-600">{{ t('login_subtitle') }}</p>
 
   <form class="mt-6 max-w-md bg-white border rounded-2xl p-6" method="post" action="/login">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token }}" />
     <label class="block text-sm font-medium">{{ t('login_email') }}</label>
     <input name="email" type="email" required class="mt-1 w-full border rounded-xl px-3 py-2" placeholder="you@example.com" />
     {% if error %}<div class="mt-2 text-sm text-red-600">{{ error }}</div>{% endif %}
