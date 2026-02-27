@@ -9,7 +9,7 @@ from app.core.settings import settings
 from app.db import models
 from app.services.openai_service import generate_report_json
 from app.services.report.pdf import build_pdf
-from app.services.email.service import send_email
+from app.services.email.service import send_report_email
 from app.services.storage.service import store_report
 
 def generate_and_send_report(report_id: str) -> None:
@@ -44,14 +44,11 @@ def generate_and_send_report(report_id: str) -> None:
 
             download_url = f"{settings.base_url}/reports/{report.id}/download"
 
-            send_email(
+            send_report_email(
                 to_email=user.email,
-                subject="Your BioAge Reset Report",
-                body=(
-                    "Attached is your BioAge Reset Protocol report PDF.\n\n"
-                    f"You can also download it from your dashboard:\n{download_url}"
-                ),
+                download_url=download_url,
                 attachment=(filename, pdf_bytes, "application/pdf"),
+                lang=user.language,
             )
 
     import asyncio

@@ -1,12 +1,12 @@
 {% extends "base.html" %}
 {% block content %}
-  <h1 class="text-2xl font-bold">{{ t('pricing_title') }}</h1>
+  <h1 class="text-3xl font-bold">{{ t('pricing_title') }}</h1>
   {% if request.query_params.get('upgrade') %}
     <div class="mt-4 text-sm text-amber-700 bg-amber-50 border border-amber-200 rounded-xl p-3">{{ t('pricing_upgrade_needed') }}</div>
   {% endif %}
 
   <div class="mt-6 grid gap-6 md:grid-cols-3">
-    <div class="bg-white rounded-2xl border p-6">
+    <div class="surface p-6">
       <div class="text-sm text-slate-500">{{ t('plan_free_title') }}</div>
       <div class="mt-2 text-3xl font-bold">{{ t('plan_free_price') }}</div>
       <ul class="mt-4 space-y-2 text-sm text-slate-700">
@@ -15,14 +15,14 @@
       </ul>
       <div class="mt-6">
         {% if current_plan == 'free' %}
-          <span class="inline-block px-4 py-2 rounded-xl border text-sm">{{ t('plan_current') }}</span>
+          <span class="inline-block px-4 py-2 rounded-xl border text-sm bg-white">{{ t('plan_current') }}</span>
         {% else %}
-          <span class="inline-block px-4 py-2 rounded-xl border text-sm">{{ t('plan_free_info') }}</span>
+          <span class="inline-block px-4 py-2 rounded-xl border text-sm bg-white">{{ t('plan_free_info') }}</span>
         {% endif %}
       </div>
     </div>
 
-    <div class="bg-white rounded-2xl border p-6">
+    <div class="surface p-6 ring-2 ring-slate-300/80">
       <div class="text-sm text-slate-500">{{ t('plan_pro_title') }}</div>
       <div class="mt-2 text-3xl font-bold">{{ t('plan_pro_price') }}</div>
       <ul class="mt-4 space-y-2 text-sm text-slate-700">
@@ -33,20 +33,20 @@
       <div class="mt-6">
         {% if user %}
           {% if current_plan == 'pro' %}
-            <span class="px-4 py-2 rounded-xl border text-sm">{{ t('plan_current') }}</span>
+            <span class="px-4 py-2 rounded-xl border text-sm bg-white">{{ t('plan_current') }}</span>
           {% else %}
             <form method="post" action="/billing/checkout/pro">
               <input type="hidden" name="csrf_token" value="{{ csrf_token }}" />
-              <button class="px-4 py-2 rounded-xl bg-slate-900 text-white w-full sm:w-auto" type="submit">{{ t('plan_subscribe') }}</button>
+              <button class="btn-primary px-4 py-2 w-full sm:w-auto" type="submit">{{ t('plan_subscribe') }}</button>
             </form>
           {% endif %}
         {% else %}
-          <a class="inline-block px-4 py-2 rounded-xl bg-slate-900 text-white w-full sm:w-auto text-center" href="/login">{{ t('cta_sign_in') }}</a>
+          <a class="inline-block btn-primary px-4 py-2 w-full sm:w-auto text-center" href="/login">{{ t('cta_sign_in') }}</a>
         {% endif %}
       </div>
     </div>
 
-    <div class="bg-white rounded-2xl border p-6">
+    <div class="surface p-6">
       <div class="text-sm text-slate-500">{{ t('plan_premium_title') }}</div>
       <div class="mt-2 text-3xl font-bold">{{ t('plan_premium_price') }}</div>
       <ul class="mt-4 space-y-2 text-sm text-slate-700">
@@ -57,15 +57,15 @@
       <div class="mt-6">
         {% if user %}
           {% if current_plan == 'premium' %}
-            <span class="px-4 py-2 rounded-xl border text-sm">{{ t('plan_current') }}</span>
+            <span class="px-4 py-2 rounded-xl border text-sm bg-white">{{ t('plan_current') }}</span>
           {% else %}
             <form method="post" action="/billing/checkout/premium">
               <input type="hidden" name="csrf_token" value="{{ csrf_token }}" />
-              <button class="px-4 py-2 rounded-xl bg-slate-900 text-white w-full sm:w-auto" type="submit">{{ t('plan_subscribe') }}</button>
+              <button class="btn-primary px-4 py-2 w-full sm:w-auto" type="submit">{{ t('plan_subscribe') }}</button>
             </form>
           {% endif %}
         {% else %}
-          <a class="inline-block px-4 py-2 rounded-xl bg-slate-900 text-white w-full sm:w-auto text-center" href="/login">{{ t('cta_sign_in') }}</a>
+          <a class="inline-block btn-primary px-4 py-2 w-full sm:w-auto text-center" href="/login">{{ t('cta_sign_in') }}</a>
         {% endif %}
       </div>
     </div>
@@ -73,7 +73,7 @@
 
   <div class="mt-4 text-xs text-slate-500">{{ t('pricing_payments_mode') }}: <b>{{ settings.payments_mode }}</b></div>
   <div class="mt-6 grid md:grid-cols-2 gap-6">
-    <div class="bg-white rounded-2xl border p-6">
+    <div class="surface p-6">
       <div class="font-semibold">{{ t('faq_title') }}</div>
       <div class="mt-3 space-y-3 text-sm text-slate-700">
         <div>

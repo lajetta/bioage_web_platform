@@ -1,21 +1,21 @@
 {% extends "base.html" %}
 {% block content %}
-  <div class="bg-white border rounded-2xl p-5 sm:p-6">
-    <a href="/tutorials" class="text-sm underline">{{ t('tutorials_back') }}</a>
-    <div class="mt-3 text-xs text-slate-500">{{ category.title }}</div>
-    <h1 class="mt-1 text-2xl font-bold">{{ tutorial.title }}</h1>
+  <div class="surface p-5 sm:p-6">
+    <a href="/tutorials" class="btn-ghost inline-flex px-3 py-1.5 text-sm">{{ t('tutorials_back') }}</a>
+    <div class="mt-4 text-xs uppercase tracking-wide text-slate-500">{{ category.title }}</div>
+    <h1 class="mt-1 text-3xl font-bold leading-tight">{{ tutorial.title }}</h1>
     {% if tutorial.summary %}
       <p class="mt-2 text-sm text-slate-600">{{ tutorial.summary }}</p>
     {% endif %}
     {% if tutorial.body %}
-      <div class="mt-4 text-sm text-slate-800 whitespace-pre-line">{{ tutorial.body }}</div>
+      <div class="mt-5 text-sm text-slate-800 whitespace-pre-line leading-6">{{ tutorial.body }}</div>
     {% endif %}
   {% if tutorial_video_url %}
     <div class="mt-6">
       {% if tutorial_video_is_embed %}
         <div class="aspect-video max-w-3xl">
           <iframe
-            class="w-full h-full rounded-xl border"
+            class="w-full h-full rounded-xl border border-slate-200 bg-white"
             src="{{ tutorial_video_url }}"
             title="{{ tutorial.title }}"
               loading="lazy"
@@ -25,7 +25,7 @@
             </iframe>
           </div>
       {% else %}
-        <video class="w-full max-w-3xl rounded-xl border bg-black" controls preload="metadata">
+        <video class="w-full max-w-3xl rounded-xl border border-slate-200 bg-black" controls preload="metadata">
           <source src="{{ tutorial_video_url }}" />
         </video>
       {% endif %}
@@ -33,7 +33,7 @@
   {% endif %}
   {% if tutorial_file_url %}
     <div class="mt-4">
-      <a class="underline text-sm" href="{{ tutorial_file_url }}" target="_blank" rel="noopener">{{ t('tutorials_download') }}</a>
+      <a class="btn-primary inline-flex px-3 py-1.5 text-sm" href="{{ tutorial_file_url }}" target="_blank" rel="noopener">{{ t('tutorials_download') }}</a>
     </div>
   {% endif %}
   </div>

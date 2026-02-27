@@ -14,11 +14,23 @@ from sqlalchemy import select
 
 from app.core.i18n import get_lang, t
 from app.core.questions import QUESTIONS, validate_answer
-from app.core.security import expires_in, generate_code, hash_code, sign_csrf, sign_session, unsign_session, verify_csrf
+from app.core.security import (
+    expires_in,
+    generate_code,
+    hash_code,
+    hash_password,
+    sign_csrf,
+    sign_session,
+    sign_signup_token,
+    unsign_session,
+    unsign_signup_token,
+    verify_csrf,
+    verify_password,
+)
 from app.core.settings import settings
 from app.db.session import SessionLocal
 from app.db import models
-from app.services.email.service import send_email
+from app.services.email.service import send_login_code_email
 from app.services.payments.service import create_checkout
 from app.services.subscriptions.service import (
     PLAN_FEATURES,
@@ -217,6 +229,31 @@ def _slugify(value: str) -> str:
     return slug[:96]
 
 
+def _normalize_username(value: str) -> str:
+    username = (value or "").strip()
+    username = re.sub(r"\s+", "_", username)
+    username = re.sub(r"[^A-Za-z0-9_.-]", "", username)
+    return username[:64]
+
+
+def _normalize_name(value: str, *, max_len: int = 100) -> str:
+    return (value or "").strip()[:max_len]
+
+
+def _validate_signup_password(password: str) -> str | None:
+    if len(password) < 10:
+        return "error_password_too_short"
+    if not re.search(r"[A-Z]", password):
+        return "error_password_missing_upper"
+    if not re.search(r"[a-z]", password):
+        return "error_password_missing_lower"
+    if not re.search(r"[0-9]", password):
+        return "error_password_missing_digit"
+    if not re.search(r"[^A-Za-z0-9]", password):
+        return "error_password_missing_special"
+    return None
+
+
 def _is_embed_video_url(url: str) -> bool:
     value = (url or "").lower()
     return "youtube.com/embed/" in value or "player.vimeo.com/video/" in value
@@ -303,9 +340,12 @@ async def _admin_context(db, user: models.User, *, saved: bool, error: str | Non
 
 
 @app.get("/lang/{code}")
-async def set_lang(code: str, request: Request):
+async def set_lang(code: str, request: Request, user=Depends(get_current_user), db=Depends(get_db)):
     if code not in ("en", "uk", "ru"):
         raise HTTPException(400, "Unsupported language")
+    if user and user.language != code:
+        user.language = code
+        await db.commit()
     resp = RedirectResponse(url=request.headers.get("referer") or "/", status_code=302)
     resp.set_cookie("lang", code, max_age=60 * 60 * 24 * 365, secure=settings.session_cookie_secure, samesite=settings.session_cookie_samesite)
     return resp
@@ -341,7 +381,21 @@ async def pricing(request: Request, user=Depends(get_current_user), db=Depends(g
 async def login_page(request: Request, user=Depends(get_current_user)):
     if user:
         return RedirectResponse("/dashboard", status_code=302)
-    return _render(request, "login.html", {"user": None, "error": None})
+    mode = (request.query_params.get("mode") or "signup").strip().lower()
+    if mode not in {"signup", "signin"}:
+        mode = "signup"
+    return _render(
+        request,
+        "login.html",
+        {
+            "user": None,
+            "signup_error": None,
+            "signin_error": None,
+            "signup_form": {"email": "", "username": "", "first_name": "", "last_name": ""},
+            "signin_form": {"email": ""},
+            "auth_mode": mode,
+        },
+    )
 
 
 @app.get("/logout")
@@ -356,31 +410,179 @@ async def logout():
     return resp
 
 
-@app.post("/login")
-async def login_send_code(request: Request, email: str = Form(...), csrf_token: str = Form(""), db=Depends(get_db)):
+@app.post("/signup/request-code")
+async def signup_request_code(
+    request: Request,
+    username: str = Form(""),
+    first_name: str = Form(""),
+    last_name: str = Form(""),
+    email: str = Form(...),
+    password: str = Form(""),
+    password_confirm: str = Form(""),
+    csrf_token: str = Form(""),
+    db=Depends(get_db),
+):
     from email_validator import validate_email, EmailNotValidError
 
     _verify_csrf_or_403(request, csrf_token)
     lang = get_lang(request)
+    username_norm = _normalize_username(username)
+    first_name_norm = _normalize_name(first_name)
+    last_name_norm = _normalize_name(last_name)
+    if not username_norm:
+        return _render(
+            request,
+            "login.html",
+            {
+                "user": None,
+                "signup_error": t(lang, "error_username_required"),
+                "signin_error": None,
+                "signup_form": {"email": email, "username": username, "first_name": first_name, "last_name": last_name},
+                "signin_form": {"email": ""},
+                "auth_mode": "signup",
+            },
+        )
+    if not first_name_norm:
+        return _render(
+            request,
+            "login.html",
+            {
+                "user": None,
+                "signup_error": t(lang, "error_first_name_required"),
+                "signin_error": None,
+                "signup_form": {"email": email, "username": username_norm, "first_name": first_name, "last_name": last_name},
+                "signin_form": {"email": ""},
+                "auth_mode": "signup",
+            },
+        )
+    if not last_name_norm:
+        return _render(
+            request,
+            "login.html",
+            {
+                "user": None,
+                "signup_error": t(lang, "error_last_name_required"),
+                "signin_error": None,
+                "signup_form": {"email": email, "username": username_norm, "first_name": first_name_norm, "last_name": last_name},
+                "signin_form": {"email": ""},
+                "auth_mode": "signup",
+            },
+        )
+    password_error_key = _validate_signup_password(password)
+    if password_error_key:
+        return _render(
+            request,
+            "login.html",
+            {
+                "user": None,
+                "signup_error": t(lang, password_error_key),
+                "signin_error": None,
+                "signup_form": {"email": email, "username": username_norm, "first_name": first_name_norm, "last_name": last_name_norm},
+                "signin_form": {"email": ""},
+                "auth_mode": "signup",
+            },
+        )
+    if password != password_confirm:
+        return _render(
+            request,
+            "login.html",
+            {
+                "user": None,
+                "signup_error": t(lang, "error_password_mismatch"),
+                "signin_error": None,
+                "signup_form": {"email": email, "username": username_norm, "first_name": first_name_norm, "last_name": last_name_norm},
+                "signin_form": {"email": ""},
+                "auth_mode": "signup",
+            },
+        )
+
     client_ip = _client_ip(request)
     if not _rate_limit_ok(
         f"rl:login:ip:{client_ip}",
         settings.rate_limit_login_ip_limit,
         settings.rate_limit_login_ip_window_seconds,
     ):
-        return _render(request, "login.html", {"user": None, "error": t(lang, "error_rate_limited")})
+        return _render(
+            request,
+            "login.html",
+            {
+                "user": None,
+                "signup_error": t(lang, "error_rate_limited"),
+                "signin_error": None,
+                "signup_form": {"email": email, "username": username_norm, "first_name": first_name_norm, "last_name": last_name_norm},
+                "signin_form": {"email": ""},
+                "auth_mode": "signup",
+            },
+        )
 
     try:
         email_norm = validate_email(email, check_deliverability=False).email
     except EmailNotValidError:
-        return _render(request, "login.html", {"user": None, "error": t(lang, "error_invalid_email")})
+        return _render(
+            request,
+            "login.html",
+            {
+                "user": None,
+                "signup_error": t(lang, "error_invalid_email"),
+                "signin_error": None,
+                "signup_form": {"email": email, "username": username_norm, "first_name": first_name_norm, "last_name": last_name_norm},
+                "signin_form": {"email": ""},
+                "auth_mode": "signup",
+            },
+        )
+
+    existing_by_email_q = select(models.User).where(models.User.email == email_norm)
+    existing_by_email_res = await db.execute(existing_by_email_q)
+    existing_by_email = existing_by_email_res.scalars().first()
+
+    existing_by_username_q = select(models.User).where(models.User.username == username_norm)
+    existing_by_username_res = await db.execute(existing_by_username_q)
+    existing_by_username = existing_by_username_res.scalars().first()
+
+    if existing_by_email:
+        return _render(
+            request,
+            "login.html",
+            {
+                "user": None,
+                "signup_error": t(lang, "error_signup_email_exists"),
+                "signin_error": None,
+                "signup_form": {"email": email_norm, "username": username_norm, "first_name": first_name_norm, "last_name": last_name_norm},
+                "signin_form": {"email": ""},
+                "auth_mode": "signup",
+            },
+        )
+    if existing_by_username and existing_by_username.email != email_norm:
+        return _render(
+            request,
+            "login.html",
+            {
+                "user": None,
+                "signup_error": t(lang, "error_signup_username_taken"),
+                "signin_error": None,
+                "signup_form": {"email": email_norm, "username": username_norm, "first_name": first_name_norm, "last_name": last_name_norm},
+                "signin_form": {"email": ""},
+                "auth_mode": "signup",
+            },
+        )
 
     if not _rate_limit_ok(
         f"rl:login:email:{email_norm}",
         settings.rate_limit_login_email_limit,
         settings.rate_limit_login_email_window_seconds,
     ):
-        return _render(request, "login.html", {"user": None, "error": t(lang, "error_rate_limited")})
+        return _render(
+            request,
+            "login.html",
+            {
+                "user": None,
+                "signup_error": t(lang, "error_rate_limited"),
+                "signin_error": None,
+                "signup_form": {"email": email_norm, "username": username_norm, "first_name": first_name_norm, "last_name": last_name_norm},
+                "signin_form": {"email": ""},
+                "auth_mode": "signup",
+            },
+        )
 
     code = generate_code()
     code_h = hash_code(code)
@@ -390,10 +592,29 @@ async def login_send_code(request: Request, email: str = Form(...), csrf_token: 
     db.add(rec)
     await db.commit()
 
-    send_email(
-        to_email=email_norm,
-        subject="Your BioAge login code",
-        body=f"Your login code is: {code}\n\nIt expires in 10 minutes.",
+    if not send_login_code_email(to_email=email_norm, code=code, lang=lang):
+        return _render(
+            request,
+            "login.html",
+            {
+                "user": None,
+                "signup_error": t(lang, "error_email_send_failed"),
+                "signin_error": None,
+                "signup_form": {"email": email_norm, "username": username_norm, "first_name": first_name_norm, "last_name": last_name_norm},
+                "signin_form": {"email": ""},
+                "auth_mode": "signup",
+            },
+        )
+
+    signup_token = sign_signup_token(
+        {
+            "email": email_norm,
+            "username": username_norm,
+            "first_name": first_name_norm,
+            "last_name": last_name_norm,
+            "password_hash": hash_password(password),
+            "language": lang,
+        }
     )
 
     # In dev, show a hint if SMTP is not configured
@@ -401,28 +622,80 @@ async def login_send_code(request: Request, email: str = Form(...), csrf_token: 
     if not settings.smtp_host:
         hint = code
 
-    resp = _render(request, "verify.html", {"email": email_norm, "hint": hint, "error": None})
+    resp = _render(
+        request,
+        "verify.html",
+        {
+            "email": email_norm,
+            "hint": hint,
+            "error": None,
+            "username": username_norm,
+            "signup_token": signup_token,
+            "auth_mode": "signup",
+        },
+    )
     return resp
 
 
 @app.post("/verify")
-async def verify_code(request: Request, email: str = Form(...), code: str = Form(...), csrf_token: str = Form(""), db=Depends(get_db)):
+async def verify_code(
+    request: Request,
+    email: str = Form(...),
+    code: str = Form(...),
+    signup_token: str = Form(""),
+    csrf_token: str = Form(""),
+    db=Depends(get_db),
+):
     _verify_csrf_or_403(request, csrf_token)
     lang = get_lang(request)
     email = email.strip().lower()
+    payload = unsign_signup_token(signup_token)
+    if not payload:
+        return _render(request, "login.html", {"user": None, "signup_error": t(lang, "error_signup_session_expired"), "signin_error": None, "signup_form": {"email": email, "username": "", "first_name": "", "last_name": ""}, "signin_form": {"email": ""}, "auth_mode": "signup"})
+    if payload.get("email") != email:
+        return _render(request, "login.html", {"user": None, "signup_error": t(lang, "error_signup_session_expired"), "signin_error": None, "signup_form": {"email": email, "username": "", "first_name": "", "last_name": ""}, "signin_form": {"email": ""}, "auth_mode": "signup"})
+
+    username_norm = _normalize_username(payload.get("username", ""))
+    first_name_norm = _normalize_name(payload.get("first_name", ""))
+    last_name_norm = _normalize_name(payload.get("last_name", ""))
+    password_hash_value = (payload.get("password_hash", "") or "").strip()
+    language = payload.get("language", lang)
+    if not username_norm or not first_name_norm or not last_name_norm or not password_hash_value:
+        return _render(request, "login.html", {"user": None, "signup_error": t(lang, "error_signup_session_expired"), "signin_error": None, "signup_form": {"email": email, "username": "", "first_name": "", "last_name": ""}, "signin_form": {"email": ""}, "auth_mode": "signup"})
+
     client_ip = _client_ip(request)
     if not _rate_limit_ok(
         f"rl:verify:ip:{client_ip}",
         settings.rate_limit_verify_ip_limit,
         settings.rate_limit_verify_ip_window_seconds,
     ):
-        return _render(request, "verify.html", {"email": email, "hint": None, "error": t(lang, "error_rate_limited")})
+        return _render(
+            request,
+            "verify.html",
+            {
+                "email": email,
+                "hint": None,
+                "error": t(lang, "error_rate_limited"),
+                "username": username_norm,
+                "signup_token": signup_token,
+            },
+        )
     if not _rate_limit_ok(
         f"rl:verify:email:{email}",
         settings.rate_limit_verify_email_limit,
         settings.rate_limit_verify_email_window_seconds,
     ):
-        return _render(request, "verify.html", {"email": email, "hint": None, "error": t(lang, "error_rate_limited")})
+        return _render(
+            request,
+            "verify.html",
+            {
+                "email": email,
+                "hint": None,
+                "error": t(lang, "error_rate_limited"),
+                "username": username_norm,
+                "signup_token": signup_token,
+            },
+        )
     code_h = hash_code(code.strip())
 
     q = select(models.MagicLoginCode).where(
@@ -434,20 +707,149 @@ async def verify_code(request: Request, email: str = Form(...), code: str = Form
     rec = res.scalars().first()
 
     if not rec or rec.code_hash != code_h:
-        return _render(request, "verify.html", {"email": email, "hint": None, "error": t(lang, "error_wrong_code")})
+        return _render(
+            request,
+            "verify.html",
+            {
+                "email": email,
+                "hint": None,
+                "error": t(lang, "error_wrong_code"),
+                "username": username_norm,
+                "signup_token": signup_token,
+            },
+        )
 
-    rec.used = True
-
-    # upsert user
     uq = select(models.User).where(models.User.email == email)
     ures = await db.execute(uq)
     user = ures.scalars().first()
-    if not user:
-        user = models.User(email=email, language=get_lang(request))
-        db.add(user)
-        await db.flush()
 
+    if user:
+        return _render(
+            request,
+            "verify.html",
+            {
+                "email": email,
+                "hint": None,
+                "error": t(lang, "error_signup_email_exists"),
+                "username": username_norm,
+                "signup_token": signup_token,
+            },
+        )
+
+    existing_by_username_q = select(models.User).where(models.User.username == username_norm)
+    existing_by_username_res = await db.execute(existing_by_username_q)
+    existing_by_username = existing_by_username_res.scalars().first()
+    if existing_by_username and existing_by_username.email != email:
+        return _render(
+            request,
+            "verify.html",
+            {
+                "email": email,
+                "hint": None,
+                "error": t(lang, "error_signup_username_taken"),
+                "username": username_norm,
+                "signup_token": signup_token,
+            },
+        )
+
+    user = models.User(
+        email=email,
+        language=language if language in ("en", "uk", "ru") else get_lang(request),
+        username=username_norm,
+        first_name=first_name_norm,
+        last_name=last_name_norm,
+        password_hash=password_hash_value,
+    )
+    db.add(user)
+    await db.flush()
+
+    rec.used = True
     await db.commit()
+
+    token = sign_session(user.id)
+    resp = RedirectResponse("/dashboard", status_code=302)
+    resp.set_cookie(
+        settings.session_cookie_name,
+        token,
+        httponly=True,
+        secure=settings.session_cookie_secure,
+        samesite=settings.session_cookie_samesite,
+        max_age=settings.session_max_age_seconds,
+    )
+    return resp
+
+
+@app.post("/signin")
+async def signin_password(
+    request: Request,
+    email: str = Form(""),
+    password: str = Form(""),
+    csrf_token: str = Form(""),
+    db=Depends(get_db),
+):
+    from email_validator import validate_email, EmailNotValidError
+
+    _verify_csrf_or_403(request, csrf_token)
+    lang = get_lang(request)
+    try:
+        email_norm = validate_email(email, check_deliverability=False).email
+    except EmailNotValidError:
+        email_norm = ""
+
+    if not email_norm or not password:
+        return _render(
+            request,
+            "login.html",
+            {
+                "user": None,
+                "signup_error": None,
+                "signin_error": t(lang, "error_signin_invalid_credentials"),
+                "signup_form": {"email": "", "username": "", "first_name": "", "last_name": ""},
+                "signin_form": {"email": email},
+                "auth_mode": "signin",
+            },
+        )
+
+    client_ip = _client_ip(request)
+    if not _rate_limit_ok(
+        f"rl:signin:ip:{client_ip}",
+        settings.rate_limit_login_ip_limit,
+        settings.rate_limit_login_ip_window_seconds,
+    ):
+        return _render(
+            request,
+            "login.html",
+            {
+                "user": None,
+                "signup_error": None,
+                "signin_error": t(lang, "error_rate_limited"),
+                "signup_form": {"email": "", "username": "", "first_name": "", "last_name": ""},
+                "signin_form": {"email": email_norm},
+                "auth_mode": "signin",
+            },
+        )
+
+    q = select(models.User).where(models.User.email == email_norm)
+    res = await db.execute(q)
+    user = res.scalars().first()
+    if not user or not verify_password(password, user.password_hash):
+        return _render(
+            request,
+            "login.html",
+            {
+                "user": None,
+                "signup_error": None,
+                "signin_error": t(lang, "error_signin_invalid_credentials"),
+                "signup_form": {"email": "", "username": "", "first_name": "", "last_name": ""},
+                "signin_form": {"email": email_norm},
+                "auth_mode": "signin",
+            },
+        )
+
+    current_lang = get_lang(request)
+    if user.language != current_lang:
+        user.language = current_lang
+        await db.commit()
 
     token = sign_session(user.id)
     resp = RedirectResponse("/dashboard", status_code=302)
@@ -596,6 +998,9 @@ async def start_report_generation(request: Request, assessment_id: str, csrf_tok
     allowed, _plan_id = await can_generate_report(db, user.id)
     if not allowed:
         return RedirectResponse("/pricing?upgrade=1", status_code=302)
+    current_lang = get_lang(request)
+    if user.language != current_lang:
+        user.language = current_lang
 
     report = models.Report(user_id=user.id, assessment_id=assessment.id, status="queued")
     db.add(report)

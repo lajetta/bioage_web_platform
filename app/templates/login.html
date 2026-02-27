@@ -1,13 +1,43 @@
 {% extends "base.html" %}
 {% block content %}
-  <h1 class="text-2xl font-bold">{{ t('login_title') }}</h1>
+  <h1 class="text-3xl font-bold">{{ t('login_title') }}</h1>
   <p class="mt-2 text-sm text-slate-600">{{ t('login_subtitle') }}</p>
 
-  <form class="mt-6 max-w-md bg-white border rounded-2xl p-6" method="post" action="/login">
-    <input type="hidden" name="csrf_token" value="{{ csrf_token }}" />
-    <label class="block text-sm font-medium">{{ t('login_email') }}</label>
-    <input name="email" type="email" required class="mt-1 w-full border rounded-xl px-3 py-2" placeholder="you@example.com" />
-    {% if error %}<div class="mt-2 text-sm text-red-600">{{ error }}</div>{% endif %}
-    <button class="mt-4 w-full px-4 py-2 rounded-xl bg-slate-900 text-white" type="submit">{{ t('login_send_code') }}</button>
-  </form>
+  <div class="mt-6 max-w-lg surface p-6">
+    <label class="block text-sm font-medium">{{ t('login_mode_label') }}</label>
+    <div class="mt-2 grid grid-cols-2 gap-2 rounded-xl border border-slate-300 bg-white p-1">
+      <a href="/login?mode=signup" class="rounded-lg px-3 py-2 text-center text-sm {% if (auth_mode or 'signup') == 'signup' %}bg-slate-900 text-white{% else %}text-slate-700{% endif %}">{{ t('cta_sign_up') }}</a>
+      <a href="/login?mode=signin" class="rounded-lg px-3 py-2 text-center text-sm {% if (auth_mode or 'signup') == 'signin' %}bg-slate-900 text-white{% else %}text-slate-700{% endif %}">{{ t('cta_sign_in') }}</a>
+    </div>
+
+    <form id="signup_form" class="mt-5 {% if (auth_mode or 'signup') != 'signup' %}hidden{% endif %}" method="post" action="/signup/request-code">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token }}" />
+      <label class="block text-sm font-medium">{{ t('login_username') }}</label>
+      <input name="username" type="text" required class="mt-1 w-full border border-slate-300 rounded-xl px-3 py-2 bg-white" value="{{ signup_form.username if signup_form else '' }}" />
+      <label class="block text-sm font-medium mt-3">{{ t('login_first_name') }}</label>
+      <input name="first_name" type="text" required class="mt-1 w-full border border-slate-300 rounded-xl px-3 py-2 bg-white" value="{{ signup_form.first_name if signup_form else '' }}" />
+      <label class="block text-sm font-medium mt-3">{{ t('login_last_name') }}</label>
+      <input name="last_name" type="text" required class="mt-1 w-full border border-slate-300 rounded-xl px-3 py-2 bg-white" value="{{ signup_form.last_name if signup_form else '' }}" />
+      <label class="block text-sm font-medium mt-3">{{ t('login_email') }}</label>
+      <input name="email" type="email" required class="mt-1 w-full border border-slate-300 rounded-xl px-3 py-2 bg-white" placeholder="you@example.com" value="{{ signup_form.email if signup_form else '' }}" />
+      <label class="block text-sm font-medium mt-3">{{ t('login_password') }}</label>
+      <input name="password" type="password" required class="mt-1 w-full border border-slate-300 rounded-xl px-3 py-2 bg-white" />
+      <label class="block text-sm font-medium mt-3">{{ t('login_password_confirm') }}</label>
+      <input name="password_confirm" type="password" required class="mt-1 w-full border border-slate-300 rounded-xl px-3 py-2 bg-white" />
+      <div class="mt-2 text-xs text-slate-500">{{ t('signup_password_hint') }}</div>
+      {% if signup_error %}<div class="mt-2 text-sm text-red-600">{{ signup_error }}</div>{% endif %}
+      <button class="mt-4 w-full px-4 py-2 btn-primary" type="submit">{{ t('signup_send_code') }}</button>
+    </form>
+
+    <form id="signin_form" class="mt-5 {% if (auth_mode or 'signup') != 'signin' %}hidden{% endif %}" method="post" action="/signin">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token }}" />
+      <label class="block text-sm font-medium">{{ t('login_email') }}</label>
+      <input name="email" type="email" required class="mt-1 w-full border border-slate-300 rounded-xl px-3 py-2 bg-white" value="{{ signin_form.email if signin_form else '' }}" />
+      <label class="block text-sm font-medium mt-3">{{ t('login_password') }}</label>
+      <input name="password" type="password" required class="mt-1 w-full border border-slate-300 rounded-xl px-3 py-2 bg-white" />
+      {% if signin_error %}<div class="mt-2 text-sm text-red-600">{{ signin_error }}</div>{% endif %}
+      <button class="mt-4 w-full px-4 py-2 btn-primary" type="submit">{{ t('cta_sign_in') }}</button>
+    </form>
+  </div>
+
 {% endblock %}

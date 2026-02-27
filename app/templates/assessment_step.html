@@ -1,33 +1,33 @@
 {% extends "base.html" %}
 {% block content %}
   <div class="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-    <h1 class="text-2xl font-bold">{{ t('assessment_title') }}</h1>
-    <div class="text-sm text-slate-500">{{ t('assessment_step') }} {{ step }} / {{ total }}</div>
+    <h1 class="text-3xl font-bold leading-tight">{{ t('assessment_title') }}</h1>
+    <div class="pill">{{ t('assessment_step') }} {{ step }} / {{ total }}</div>
   </div>
 
-  <form class="mt-6 bg-white border rounded-2xl p-6 max-w-2xl" method="post">
+  <form class="mt-6 surface p-6 max-w-2xl" method="post">
     <input type="hidden" name="csrf_token" value="{{ csrf_token }}" />
-    <div class="text-sm font-medium">{{ label }}</div>
+    <div class="text-base font-semibold">{{ label }}</div>
 
     {% if q.kind == 'choice' %}
-      <select name="value" class="mt-2 w-full border rounded-xl px-3 py-2">
+      <select name="value" class="mt-3 w-full border border-slate-300 rounded-xl px-3 py-2.5 bg-white">
         {% for c in q.choices %}
           <option value="{{c}}" {% if existing==c %}selected{% endif %}>{{ t('choice_' ~ c) }}</option>
         {% endfor %}
       </select>
     {% else %}
-      <input name="value" value="{{ existing }}" class="mt-2 w-full border rounded-xl px-3 py-2" />
+      <input name="value" value="{{ existing }}" class="mt-3 w-full border border-slate-300 rounded-xl px-3 py-2.5 bg-white" />
     {% endif %}
 
     {% if error %}<div class="mt-2 text-sm text-red-600">{{ error }}</div>{% endif %}
 
     <div class="mt-6 flex flex-col gap-3 sm:flex-row sm:justify-between">
       {% if step > 1 %}
-        <a class="px-4 py-2 rounded-xl border text-center" href="/assessment/{{ assessment.id }}/{{ step-1 }}">{{ t('assessment_back') }}</a>
+        <a class="btn-ghost px-4 py-2 text-center" href="/assessment/{{ assessment.id }}/{{ step-1 }}">{{ t('assessment_back') }}</a>
       {% else %}
         <span></span>
       {% endif %}
-      <button class="px-4 py-2 rounded-xl bg-slate-900 text-white" type="submit">{{ t('assessment_next') }}</button>
+      <button class="btn-primary px-4 py-2" type="submit">{{ t('assessment_next') }}</button>
     </div>
   </form>
 {% endblock %}

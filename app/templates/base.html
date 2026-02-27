@@ -4,12 +4,76 @@
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>{{ app_name }}</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;700;800&family=Space+Grotesk:wght@500;700&display=swap" rel="stylesheet">
   <script src="https://cdn.tailwindcss.com"></script>
+  <style>
+    :root {
+      --bg: #f4f7fb;
+      --ink: #0e1726;
+      --muted: #5d6778;
+      --line: #d9e1ed;
+      --card: #ffffffcc;
+      --brand: #111827;
+      --brand-ink: #ffffff;
+      --brand-soft: #e5e7eb;
+    }
+    body {
+      font-family: "Manrope", sans-serif;
+      color: var(--ink);
+      background:
+        radial-gradient(1200px 500px at 10% -10%, #dceafe 10%, transparent 65%),
+        radial-gradient(1000px 450px at 95% 0%, #e9f6f2 10%, transparent 60%),
+        var(--bg);
+    }
+    h1, h2, h3, .display-font {
+      font-family: "Space Grotesk", sans-serif;
+      letter-spacing: -0.02em;
+    }
+    .surface {
+      background: var(--card);
+      backdrop-filter: blur(4px);
+      border: 1px solid var(--line);
+      border-radius: 1rem;
+      box-shadow: 0 10px 24px -18px rgba(15, 23, 42, 0.35);
+    }
+    .btn-primary {
+      background: linear-gradient(135deg, #0f172a 0%, #111827 55%, #1f2937 100%);
+      color: var(--brand-ink);
+      border: 1px solid #111827;
+      border-radius: 0.75rem;
+      transition: transform .15s ease, box-shadow .15s ease, filter .15s ease;
+    }
+    .btn-primary:hover {
+      transform: translateY(-1px);
+      box-shadow: 0 10px 20px -14px rgba(15, 23, 42, .9);
+      filter: brightness(1.02);
+    }
+    .btn-ghost {
+      background: #fff;
+      border: 1px solid var(--line);
+      border-radius: 0.75rem;
+      transition: border-color .15s ease, transform .15s ease;
+    }
+    .btn-ghost:hover {
+      border-color: #b5c4dc;
+      transform: translateY(-1px);
+    }
+    .pill {
+      border: 1px solid var(--line);
+      border-radius: 999px;
+      padding: .2rem .55rem;
+      font-size: .75rem;
+      color: #314158;
+      background: #fff;
+    }
+  </style>
 </head>
-<body class="bg-slate-50 text-slate-900">
-  <header class="border-b bg-white">
+<body>
+  <header class="sticky top-0 z-20 border-b border-slate-200/70 bg-white/85 backdrop-blur">
     <div class="mx-auto max-w-5xl px-4 py-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-      <a href="/" class="font-semibold">{{ app_name }}</a>
+      <a href="/" class="display-font text-[1.05rem] font-bold">{{ app_name }}</a>
       <nav class="flex w-full flex-wrap items-center gap-x-4 gap-y-2 text-sm sm:w-auto sm:justify-end">
         <a class="hover:underline" href="/">{{ t('nav_home') }}</a>
         <a class="hover:underline" href="/pricing">{{ t('nav_pricing') }}</a>
@@ -35,7 +99,7 @@
     {% block content %}{% endblock %}
   </main>
 
-  <footer class="border-t bg-white">
+  <footer class="border-t border-slate-200/70 bg-white/85">
     <div class="mx-auto max-w-5xl px-4 py-6 text-xs text-slate-500">
       <div>(c) {{ app_name }} - {{ t('footer_mvp') }}</div>
       <div class="mt-1">{{ t('footer_disclaimer') }}</div>

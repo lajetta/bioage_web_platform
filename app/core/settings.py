@@ -29,7 +29,9 @@ class Settings(BaseSettings):
     smtp_username: str | None = None
     smtp_password: str | None = None
     email_from: str | None = None
+    email_from_name: str | None = None
     smtp_use_tls: bool = True
+    smtp_use_ssl: bool = False
     smtp_timeout_seconds: int = 20
     email_send_retries: int = 3
 
