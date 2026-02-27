@@ -82,15 +82,19 @@ def store_upload(filename: str, data: bytes, content_type: str | None = None) ->
     return abs_path
 
 
-def presigned_download_url(ref: str) -> str | None:
+def presigned_download_url(ref: str, *, inline: bool = False, filename: str | None = None) -> str | None:
     if not is_s3_ref(ref):
         return None
     if not settings.s3_bucket:
         return None
     key = _s3_key_from_ref(ref)
+    params = {"Bucket": settings.s3_bucket, "Key": key}
+    if inline:
+        resolved_name = filename or os.path.basename(key) or "report.pdf"
+        params["ResponseContentDisposition"] = f'inline; filename="{resolved_name}"'
     return _s3_client().generate_presigned_url(
         "get_object",
-        Params={"Bucket": settings.s3_bucket, "Key": key},
+        Params=params,
         ExpiresIn=settings.s3_presign_expiry_seconds,
     )
 

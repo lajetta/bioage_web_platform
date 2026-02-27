@@ -5,7 +5,7 @@ import re
 from datetime import datetime, timedelta, timezone
 from urllib.parse import parse_qs, urlparse
 
-from fastapi import BackgroundTasks, Cookie, Depends, FastAPI, File, Form, HTTPException, Request, UploadFile
+from fastapi import BackgroundTasks, Cookie, Depends, FastAPI, File, Form, HTTPException, Request, Response, UploadFile
 from fastapi.responses import FileResponse, HTMLResponse, PlainTextResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
@@ -32,6 +32,7 @@ from app.db.session import SessionLocal
 from app.db import models
 from app.services.email.service import send_login_code_email
 from app.services.payments.service import create_checkout
+from app.services.report.pdf import build_pdf
 from app.services.subscriptions.service import (
     PLAN_FEATURES,
     can_generate_report,
@@ -308,6 +309,10 @@ async def _save_upload(
 
 def _normalize_plan_id(value: str | None) -> str:
     return value if value in {"free", "pro", "premium"} else "free"
+
+
+def _report_filename(report: models.Report) -> str:
+    return f"bioage_report_{report.id}.pdf"
 
 
 async def _admin_context(db, user: models.User, *, saved: bool, error: str | None):
@@ -1153,10 +1158,17 @@ async def download_report(report_id: str, user=Depends(get_current_user), db=Dep
     if not report or report.user_id != user.id:
         raise HTTPException(404)
     if not report.file_path:
+        if report.content_json:
+            pdf_bytes = build_pdf(report.content_json, user.language)
+            return Response(
+                content=pdf_bytes,
+                media_type="application/pdf",
+                headers={"Content-Disposition": f'attachment; filename="{_report_filename(report)}"'},
+            )
         raise HTTPException(404, "Report file is not ready")
 
     if is_s3_ref(report.file_path):
-        signed_url = presigned_download_url(report.file_path)
+        signed_url = presigned_download_url(report.file_path, inline=False)
         if not signed_url:
             raise HTTPException(404, "Report file not found on storage")
         return RedirectResponse(signed_url, status_code=302)
@@ -1165,12 +1177,64 @@ async def download_report(report_id: str, user=Depends(get_current_user), db=Dep
         return RedirectResponse(report.file_path, status_code=302)
 
     if not os.path.isfile(report.file_path):
+        if report.content_json:
+            pdf_bytes = build_pdf(report.content_json, user.language)
+            return Response(
+                content=pdf_bytes,
+                media_type="application/pdf",
+                headers={"Content-Disposition": f'attachment; filename="{_report_filename(report)}"'},
+            )
         raise HTTPException(404, "Report file not found on server")
 
     return FileResponse(
         path=report.file_path,
         media_type="application/pdf",
         filename=os.path.basename(report.file_path),
+    )
+
+
+@app.get("/reports/{report_id}/view")
+async def view_report(report_id: str, user=Depends(get_current_user), db=Depends(get_db)):
+    if not user:
+        return RedirectResponse("/login", status_code=302)
+
+    report = await db.get(models.Report, report_id)
+    if not report or report.user_id != user.id:
+        raise HTTPException(404)
+    if not report.file_path:
+        if report.content_json:
+            pdf_bytes = build_pdf(report.content_json, user.language)
+            return Response(
+                content=pdf_bytes,
+                media_type="application/pdf",
+                headers={"Content-Disposition": f'inline; filename="{_report_filename(report)}"'},
+            )
+        raise HTTPException(404, "Report file is not ready")
+
+    if is_s3_ref(report.file_path):
+        filename = os.path.basename(report.file_path.split("/", 3)[-1]) if "/" in report.file_path else "report.pdf"
+        signed_url = presigned_download_url(report.file_path, inline=True, filename=filename)
+        if not signed_url:
+            raise HTTPException(404, "Report file not found on storage")
+        return RedirectResponse(signed_url, status_code=302)
+
+    if report.file_path.startswith("/static/"):
+        return RedirectResponse(report.file_path, status_code=302)
+
+    if not os.path.isfile(report.file_path):
+        if report.content_json:
+            pdf_bytes = build_pdf(report.content_json, user.language)
+            return Response(
+                content=pdf_bytes,
+                media_type="application/pdf",
+                headers={"Content-Disposition": f'inline; filename="{_report_filename(report)}"'},
+            )
+        raise HTTPException(404, "Report file not found on server")
+
+    return FileResponse(
+        path=report.file_path,
+        media_type="application/pdf",
+        headers={"Content-Disposition": f'inline; filename="{os.path.basename(report.file_path)}"'},
     )
 
 
