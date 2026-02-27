@@ -9,7 +9,6 @@ from fastapi import BackgroundTasks, Cookie, Depends, FastAPI, File, Form, HTTPE
 from fastapi.responses import FileResponse, HTMLResponse, PlainTextResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
-from starlette.middleware.httpsredirect import HTTPSRedirectMiddleware
 from starlette.middleware.trustedhost import TrustedHostMiddleware
 from sqlalchemy import select
 
@@ -48,12 +47,17 @@ if os.path.isdir(STATIC_DIR):
 
 if settings.allowed_hosts and settings.allowed_hosts.strip() != "*":
     app.add_middleware(TrustedHostMiddleware, allowed_hosts=[h.strip() for h in settings.allowed_hosts.split(",") if h.strip()])
-if settings.enforce_https:
-    app.add_middleware(HTTPSRedirectMiddleware)
 
 
 @app.middleware("http")
 async def security_headers_middleware(request: Request, call_next):
+    if settings.enforce_https:
+        forwarded_proto = (request.headers.get("x-forwarded-proto") or "").split(",")[0].strip().lower()
+        is_secure = forwarded_proto == "https" or request.url.scheme == "https"
+        if not is_secure:
+            https_url = str(request.url.replace(scheme="https"))
+            return RedirectResponse(https_url, status_code=307)
+
     response = await call_next(request)
     response.headers["X-Content-Type-Options"] = "nosniff"
     response.headers["X-Frame-Options"] = "DENY"
